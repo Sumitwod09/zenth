@@ -3,16 +3,19 @@
 // Schema versioning included from day one for future sync compatibility.
 
 import * as SQLite from 'expo-sqlite';
+import { Platform } from 'react-native';
 import type { Dump, Task } from '@zenth/utils';
 
 const DB_NAME = 'zenth.db';
 
 let db: SQLite.SQLiteDatabase | null = null;
+let isWeb = Platform.OS === 'web';
 
 /**
  * Open (or create) the database and run migrations.
  */
-export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
+export async function initDatabase(): Promise<SQLite.SQLiteDatabase | null> {
+  if (isWeb) return null; // SQLite is unsupported natively on Web, handled by Supabase
   if (db) return db;
 
   db = await SQLite.openDatabaseAsync(DB_NAME);
@@ -72,6 +75,7 @@ async function migrateToV1(database: SQLite.SQLiteDatabase): Promise<void> {
 
 export async function insertDump(dump: Dump): Promise<void> {
   const database = await initDatabase();
+  if (!database) return;
   await database.runAsync(
     'INSERT INTO dumps (id, text, createdAt, convertedToTaskIds) VALUES (?, ?, ?, ?)',
     dump.id,
@@ -83,6 +87,7 @@ export async function insertDump(dump: Dump): Promise<void> {
 
 export async function getAllDumps(): Promise<Dump[]> {
   const database = await initDatabase();
+  if (!database) return [];
   const rows = await database.getAllAsync<{
     id: string;
     text: string;
@@ -101,6 +106,7 @@ export async function updateDumpTaskIds(
   taskIds: string[]
 ): Promise<void> {
   const database = await initDatabase();
+  if (!database) return;
   await database.runAsync(
     'UPDATE dumps SET convertedToTaskIds = ? WHERE id = ?',
     JSON.stringify(taskIds),
@@ -110,6 +116,7 @@ export async function updateDumpTaskIds(
 
 export async function deleteDump(id: string): Promise<void> {
   const database = await initDatabase();
+  if (!database) return;
   await database.runAsync('DELETE FROM dumps WHERE id = ?', id);
 }
 
@@ -117,6 +124,7 @@ export async function deleteDump(id: string): Promise<void> {
 
 export async function insertTask(task: Task): Promise<void> {
   const database = await initDatabase();
+  if (!database) return;
   await database.runAsync(
     'INSERT INTO tasks (id, title, sourceDumpId, status, dueAt, reminderRepeat, createdAt, completedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     task.id,
@@ -132,6 +140,7 @@ export async function insertTask(task: Task): Promise<void> {
 
 export async function getAllTasks(): Promise<Task[]> {
   const database = await initDatabase();
+  if (!database) return [];
   return await database.getAllAsync<Task>(
     'SELECT * FROM tasks ORDER BY createdAt DESC'
   );
@@ -143,6 +152,7 @@ export async function updateTaskStatus(
   completedAt: number | null
 ): Promise<void> {
   const database = await initDatabase();
+  if (!database) return;
   await database.runAsync(
     'UPDATE tasks SET status = ?, completedAt = ? WHERE id = ?',
     status,
@@ -157,6 +167,7 @@ export async function updateTaskDue(
   reminderRepeat: 'none' | 'daily' | 'weekly'
 ): Promise<void> {
   const database = await initDatabase();
+  if (!database) return;
   await database.runAsync(
     'UPDATE tasks SET dueAt = ?, reminderRepeat = ? WHERE id = ?',
     dueAt,
@@ -167,10 +178,12 @@ export async function updateTaskDue(
 
 export async function deleteTask(id: string): Promise<void> {
   const database = await initDatabase();
+  if (!database) return;
   await database.runAsync('DELETE FROM tasks WHERE id = ?', id);
 }
 
 export async function deleteAllData(): Promise<void> {
   const database = await initDatabase();
+  if (!database) return;
   await database.execAsync('DELETE FROM tasks; DELETE FROM dumps;');
 }
